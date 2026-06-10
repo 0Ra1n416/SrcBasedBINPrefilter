@@ -19,7 +19,7 @@ if _CUR_DIR not in sys.path:
     sys.path.insert(0, _CUR_DIR)
 
 from vulfunc_ranker.vulfunc_rank import source_func_count_by_algorithm
-
+from vulfunc_ranker.scripts.simple_source_count import source_func_count
 
 @contextmanager
 def suppress_stdout():
@@ -70,12 +70,16 @@ def is_likely_binary(file_path: str) -> bool:
     ext = os.path.splitext(file_path)[1].lower()
     return ext not in _NON_BINARY_EXTENSIONS
 
+def pre_defined_source_funcs_count() -> int:
+    """返回预定义的 Source 函数数量。"""
+    return source_func_count()
 
-def scan_folder(folder_path: str, use_absolute: bool = False) -> tuple[dict, dict]:
+def scan_folder(folder_path: str, pre_defined_count: int, use_absolute: bool = False) -> tuple[dict, dict]:
     """
     递归扫描文件夹中的所有二进制文件，统计每个文件的 Source 函数个数。
 
     :param folder_path: 要扫描的文件夹路径
+    :param pre_defined_count: 预定义的 Source 函数数量
     :param use_absolute: 是否输出绝对路径，默认为 False（即相对路径）
     """
     folder_path = os.path.abspath(folder_path)
@@ -109,7 +113,7 @@ def scan_folder(folder_path: str, use_absolute: bool = False) -> tuple[dict, dic
         try:
             with suppress_stdout():
                 count = source_func_count_by_algorithm(file_path)
-            results[file_path] = count
+            results[file_path] = count + pre_defined_count
         except Exception as e:
             errors[file_path] = str(e).strip()[:100]  # 记录错误信息，限制长度避免过长
             tqdm.tqdm.write(f"[ERROR] {file_path} -> {type(e).__name__}: {e}")
@@ -176,7 +180,8 @@ def main():
     parser.add_argument("-a", "--absolute", action="store_true", help="使用绝对路径输出（默认为相对路径）")
     args = parser.parse_args()
 
-    success, _ = scan_folder(args.folder_path, use_absolute=args.absolute)
+    pre_defined_count = pre_defined_source_funcs_count()
+    success, _ = scan_folder(args.folder_path, pre_defined_count, use_absolute=args.absolute)
     ranked_list = rank(success, args.threshold)
     store(ranked_list, args.output)
 
