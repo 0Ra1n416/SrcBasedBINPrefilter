@@ -49,5 +49,5 @@ def get_extern_calls(input_bin) -> list:
         if '@@' in func:
             imported_functions.remove(func)
 
-    print(f"外部调用函数列表: {imported_functions}")
+    # print(f"外部调用函数列表: {imported_functions}")
     return imported_functions

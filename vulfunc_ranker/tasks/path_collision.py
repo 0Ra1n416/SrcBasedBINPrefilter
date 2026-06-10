@@ -55,7 +55,7 @@ def get_inpf_close_funcs(inpf_funcs, inf_close_funcs) -> set:
     """
     exist_path_collision_funcs = set()
     for func in inpf_funcs:
-        print(f"分析输入解析函数: {func} 的调用关系...")
+        # print(f"分析输入解析函数: {func} 的调用关系...")
         inpf_close_funcs = get_close_funcs(func)
         inpf_close_funcs.add(func)
 
@@ -79,9 +79,9 @@ def path_collision_analysis(inf_funcs, inpf_funcs, input_bin) -> set:
     ida_auto.auto_wait()
 
     inf_close_funcs = get_inf_close_funcs(inf_funcs)
-    print(f"输入函数的近邻函数有: {inf_close_funcs}")
+    # print(f"输入函数的近邻函数有: {inf_close_funcs}")
     exist_path_collision_funcs = get_inpf_close_funcs(inpf_funcs, inf_close_funcs)
-    print(f"存在路径碰撞的函数有: {exist_path_collision_funcs}")
+    # print(f"存在路径碰撞的函数有: {exist_path_collision_funcs}")
 
     idapro.close_database()
     return exist_path_collision_funcs

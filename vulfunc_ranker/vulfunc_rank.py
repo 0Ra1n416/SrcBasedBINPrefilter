@@ -57,9 +57,9 @@ def vulfunc_rank(input_bin: str,
         sys.exit(1)
     
     # 反编译输入二进制文件
-    print(f"开始反编译: {input_bin}")
+    # print(f"开始反编译: {input_bin}")
     decompiled_results, has_real_name = vulfunc_ranker.tasks.decompile.batch_decompile(input_bin)
-    print("反编译完成!")
+    # print("反编译完成!")
 
     # 新算法判断输入解析函数
     threshold = threshold_in
@@ -75,7 +75,7 @@ def vulfunc_rank(input_bin: str,
     inf_funcs = inf.get_input_funcs()
    
     # 路径碰撞分析
-    print("开始路径碰撞分析...")
+    # print("开始路径碰撞分析...")
     path_collision_funcs = pc.path_collision_analysis(inf_funcs, inpf_funcs, input_bin)
 
     

@@ -11,6 +11,7 @@ import sys
 import os
 import tqdm
 import csv
+from contextlib import contextmanager
 
 # 将项目根目录加入 sys.path，以便导入 vulfunc_ranker 包
 _CUR_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +19,19 @@ if _CUR_DIR not in sys.path:
     sys.path.insert(0, _CUR_DIR)
 
 from vulfunc_ranker.vulfunc_rank import source_func_count_by_algorithm
+
+
+@contextmanager
+def suppress_stdout():
+    """临时抑制 stdout，用于屏蔽 ida-pro-mcp 插件的日志输出。"""
+    devnull = open(os.devnull, 'w')
+    old_stdout = sys.stdout
+    sys.stdout = devnull
+    try:
+        yield
+    finally:
+        sys.stdout = old_stdout
+        devnull.close()
 
 
 # 常见非二进制文件扩展名，扫描时跳过以提高效率
@@ -46,6 +60,8 @@ _NON_BINARY_EXTENSIONS = frozenset({
     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
     '.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar', '.cab',
     '.ipynb',
+    # IDA数据文件
+    '.idb', '.i64', '.idc', '.idap', '.idapro', '.idb.idc',
 })
 
 
@@ -91,7 +107,8 @@ def scan_folder(folder_path: str, use_absolute: bool = False) -> tuple[dict, dic
 
     for file_path in tqdm.tqdm(all_binaries, desc="处理二进制文件", unit="file"):
         try:
-            count = source_func_count_by_algorithm(file_path)
+            with suppress_stdout():
+                count = source_func_count_by_algorithm(file_path)
             results[file_path] = count
         except Exception as e:
             errors[file_path] = str(e).strip()[:100]  # 记录错误信息，限制长度避免过长
