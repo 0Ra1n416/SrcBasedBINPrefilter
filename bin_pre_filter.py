@@ -148,7 +148,7 @@ def rank(success: dict, threshold: int = 0) -> list[tuple[str, int]]:
         message = f"\n[PreFilter] 开始排序与过滤 (阈值: {threshold})..."
     print(message)
     
-    filtered = [(fp, cnt) for fp, cnt in success.items() if cnt > threshold]
+    filtered = [(fp, cnt) for fp, cnt in success.items() if cnt >= threshold]
     ranked_list = sorted(filtered, key=lambda x: x[1], reverse=True)
 
     return ranked_list
