@@ -1,0 +1,370 @@
+{
+  "acosNvramConfig_get": {
+    "index": [],
+    "description": "读取NVRAM配置项，外部数据通过返回值/输出参数返回，具体参数签名不确定"
+  },
+  "acosNvramConfig_read": {
+    "index": [],
+    "description": "读取NVRAM配置，与acosNvramConfig_get类似，参数签名不确定"
+  },
+  "acosUciConfig_get": {
+    "index": [],
+    "description": "获取UCI配置项，外部数据通过返回值/输出参数返回"
+  },
+  "argp_parse": {
+    "index": [1],
+    "description": "GNU argp参数解析，argv(索引1)包含外部命令行输入"
+  },
+  "bcm_nvram_get": {
+    "index": [],
+    "description": "博通NVRAM读取函数，外部数据通过返回值返回"
+  },
+  "cURL_read": {
+    "index": [0],
+    "description": "cURL读回调，buffer(索引0)接收从远程服务器读取的外部数据"
+  },
+  "CAL_abstract_get": {
+    "index": [],
+    "description": "CAL抽象层获取函数，外部数据通过返回值返回"
+  },
+  "cfgGetValue": {
+    "index": [],
+    "description": "配置项值获取，外部数据通过返回值/输出参数返回"
+  },
+  "cfg_get": {
+    "index": [],
+    "description": "配置获取函数，外部数据通过返回值/输出参数返回"
+  },
+  "cgi_get": {
+    "index": [],
+    "description": "CGI参数获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "cgi_value": {
+    "index": [],
+    "description": "CGI变量值获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "cgiformat_get": {
+    "index": [],
+    "description": "格式化CGI参数获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "config_get": {
+    "index": [],
+    "description": "通用配置获取，外部数据通过返回值/输出参数返回"
+  },
+  "CommandLineToArgvW": {
+    "index": [0],
+    "description": "Windows API，lpCmdLine(索引0)为外部命令行字符串，解析为argv数组"
+  },
+  "curl_easy_perform": {
+    "index": [],
+    "description": "cURL执行传输，外部数据通过CURLOPT_WRITEFUNCTION回调间接接收，非参数直接承载"
+  },
+  "curl_multi_perform": {
+    "index": [],
+    "description": "cURL多路传输，外部数据通过回调间接接收，非参数直接承载"
+  },
+  "device_get_string_value": {
+    "index": [],
+    "description": "设备字符串值获取，外部数据通过返回值/输出参数返回"
+  },
+  "DoHardwareComponent": {
+    "index": [],
+    "description": "硬件组件操作函数，具体参数不确定，可能与硬件交互获取外部数据"
+  },
+  "duktape_eval_string": {
+    "index": [1],
+    "description": "Duktape JS引擎，src(索引1)为待执行的外部JavaScript代码字符串"
+  },
+  "find_val": {
+    "index": [],
+    "description": "值查找函数，外部数据通过返回值/输出参数返回"
+  },
+  "fopen": {
+    "index": [0],
+    "description": "打开文件，pathname(索引0)指定外部文件路径"
+  },
+  "formValue": {
+    "index": [],
+    "description": "表单值获取，外部HTTP表单数据通过返回值/输出参数返回"
+  },
+  "fscanf": {
+    "index": [0],
+    "description": "格式化文件读取，stream(索引0)承载外部文件数据，变参(索引2+)存储解析结果"
+  },
+  "get_cgi": {
+    "index": [],
+    "description": "CGI参数获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "get_cgi_var": {
+    "index": [],
+    "description": "CGI变量获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "get_parameter": {
+    "index": [],
+    "description": "通用参数获取，外部数据通过返回值/输出参数返回"
+  },
+  "get_wlan_setting": {
+    "index": [],
+    "description": "无线设置获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "getenv": {
+    "index": [0],
+    "description": "获取环境变量，name(索引0)指定环境变量名，外部数据通过返回值返回"
+  },
+  "getenv_secure": {
+    "index": [0],
+    "description": "安全获取环境变量，name(索引0)指定环境变量名，外部数据通过返回值返回"
+  },
+  "getopt": {
+    "index": [1],
+    "description": "POSIX命令行选项解析，argv(索引1)包含外部命令行输入"
+  },
+  "getopt_long": {
+    "index": [1],
+    "description": "GNU长选项解析，argv(索引1)包含外部命令行输入"
+  },
+  "getoption": {
+    "index": [],
+    "description": "选项获取函数，可能是getopt的封装，参数签名不确定"
+  },
+  "help_getObjPtr": {
+    "index": [],
+    "description": "帮助系统对象指针获取，外部数据通过返回值/输出参数返回"
+  },
+  "htmlReadMemory": {
+    "index": [0],
+    "description": "libxml2 HTML解析，buffer(索引0)为待解析的外部HTML数据"
+  },
+  "httpGenListDataGet": {
+    "index": [],
+    "description": "HTTP列表数据生成/获取，外部数据通过返回值/输出参数返回"
+  },
+  "httpGetEnv": {
+    "index": [],
+    "description": "HTTP环境变量获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "httpRead": {
+    "index": [],
+    "description": "HTTP数据读取，外部HTTP响应数据通过返回值/输出参数返回"
+  },
+  "ini_parse": {
+    "index": [0],
+    "description": "INI配置文件解析，输入参数(索引0)为待解析的外部INI数据路径或内容"
+  },
+  "js_getproperty_string": {
+    "index": [],
+    "description": "JS引擎属性字符串获取，外部数据通过返回值/输出参数返回"
+  },
+  "json_object_object_get": {
+    "index": [],
+    "description": "json-c对象键值获取，从已解析的JSON对象中取值，外部数据通过返回值/输出参数返回"
+  },
+  "json_object_object_get_ex": {
+    "index": [],
+    "description": "json-c扩展对象键值获取，从已解析的JSON对象中取值，外部数据通过返回值/输出参数返回"
+  },
+  "json_tokener_parse": {
+    "index": [0],
+    "description": "json-c解析器，str(索引0)为待解析的外部JSON字符串"
+  },
+  "libxml_getNode": {
+    "index": [],
+    "description": "libxml2节点获取，从已解析的XML树中取节点，参数签名不确定"
+  },
+  "log_query": {
+    "index": [],
+    "description": "日志查询函数，外部数据通过返回值/输出参数返回"
+  },
+  "luaL_loadstring": {
+    "index": [1],
+    "description": "Lua加载字符串，s(索引1)为待执行的外部Lua代码字符串"
+  },
+  "lua_tolstring": {
+    "index": [],
+    "description": "Lua值转字符串，外部数据来自Lua栈而非直接参数，索引难以确定"
+  },
+  "NetSysRead": {
+    "index": [],
+    "description": "网络系统读取函数，外部网络数据通过返回值/输出参数返回"
+  },
+  "NK_query_entry_get": {
+    "index": [],
+    "description": "NK查询条目获取，外部数据通过返回值/输出参数返回"
+  },
+  "NvParamValueGet": {
+    "index": [],
+    "description": "NVRAM参数值获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "OM_ValFind": {
+    "index": [],
+    "description": "OpenMesh值查找，外部数据通过返回值/输出参数返回"
+  },
+  "OM_ValGet": {
+    "index": [],
+    "description": "OpenMesh值获取，外部数据通过返回值/输出参数返回"
+  },
+  "paramValueFromObjGet": {
+    "index": [],
+    "description": "从对象获取参数值，外部数据通过返回值/输出参数返回"
+  },
+  "pread": {
+    "index": [1],
+    "description": "指定偏移量读取文件，buf(索引1)接收外部文件输入数据"
+  },
+  "protobuf_parse": {
+    "index": [0],
+    "description": "Protobuf解析，输入参数(索引0)为待解析的外部Protobuf二进制数据"
+  },
+  "querystr": {
+    "index": [],
+    "description": "URL查询字符串解析/获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "QuickJS_eval": {
+    "index": [1],
+    "description": "QuickJS引擎eval，JS代码字符串(索引1)为待执行的外部脚本"
+  },
+  "rapidjson_Parse": {
+    "index": [0],
+    "description": "RapidJSON解析，json字符串(索引0)为待解析的外部JSON数据"
+  },
+  "read": {
+    "index": [1],
+    "description": "POSIX read，buf(索引1)接收外部文件/socket输入数据"
+  },
+  "readv": {
+    "index": [1],
+    "description": "POSIX readv向量读取，iov(索引1)接收外部文件/socket输入数据"
+  },
+  "recv": {
+    "index": [1],
+    "description": "recv的buf(索引1)直接接收外部socket输入"
+  },
+  "recvfrom": {
+    "index": [1],
+    "description": "recvfrom的buf(索引1)直接接收外部socket输入，src_addr(索引4)接收对端地址信息"
+  },
+  "recvmsg": {
+    "index": [1],
+    "description": "recvmsg的msg结构体(索引1)接收外部socket输入数据及控制信息"
+  },
+  "recvmmsg": {
+    "index": [1],
+    "description": "recvmmsg的msgvec数组(索引1)批量接收外部socket输入数据"
+  },
+  "scanf": {
+    "index": [0],
+    "description": "scanf的format(索引0)控制解析逻辑来自外部，变参(索引1+)为stdin解析结果存储位置"
+  },
+  "SSL_read": {
+    "index": [1],
+    "description": "OpenSSL读取，buf(索引1)接收外部SSL/TLS加密连接输入数据"
+  },
+  "ssl_read": {
+    "index": [1],
+    "description": "SSL读取，buf(索引1)接收外部SSL/TLS加密连接输入数据"
+  },
+  "sscanf": {
+    "index": [0],
+    "description": "sscanf的str(索引0)为待解析的外部输入字符串，变参(索引2+)为解析结果存储位置"
+  },
+  "stringOut": {
+    "index": [],
+    "description": "字符串输出/返回函数，外部数据通过返回值/输出参数返回"
+  },
+  "sub_4F55C": {
+    "index": [],
+    "description": "无符号信息的函数，功能不确定，需逆向分析"
+  },
+  "sw_getValueByName": {
+    "index": [],
+    "description": "按名称获取软件值，外部数据通过返回值/输出参数返回"
+  },
+  "toml_parse": {
+    "index": [0],
+    "description": "TOML配置文件解析，输入参数(索引0)为待解析的外部TOML数据路径或内容"
+  },
+  "uciGet": {
+    "index": [],
+    "description": "UCI配置获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "uciGetStr": {
+    "index": [],
+    "description": "UCI字符串配置获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "uci_get": {
+    "index": [],
+    "description": "UCI配置获取(底层)，外部配置数据通过返回值/输出参数返回"
+  },
+  "uci_get_option": {
+    "index": [],
+    "description": "UCI选项获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "uci_lookup_option_string": {
+    "index": [],
+    "description": "UCI选项字符串查找，外部配置数据通过返回值/输出参数返回"
+  },
+  "vscanf": {
+    "index": [1],
+    "description": "vscanf的ap可变参数列表(索引1)接收stdin外部输入数据"
+  },
+  "vfscanf": {
+    "index": [0],
+    "description": "vfscanf的stream(索引0)承载外部文件输入数据，ap(索引2)为解析结果存储位置"
+  },
+  "web_get": {
+    "index": [],
+    "description": "Web参数获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "webGetVarString": {
+    "index": [],
+    "description": "Web变量字符串获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "webRead": {
+    "index": [],
+    "description": "Web数据读取，外部HTTP请求/响应数据通过返回值/输出参数返回"
+  },
+  "WEB_GetVar": {
+    "index": [],
+    "description": "Web变量获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "websFormData": {
+    "index": [],
+    "description": "Web表单数据获取，外部HTTP表单数据通过返回值/输出参数返回"
+  },
+  "websGetVar": {
+    "index": [],
+    "description": "GoAhead Web变量获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "websRead": {
+    "index": [],
+    "description": "GoAhead Web数据读取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "wl_getParameter": {
+    "index": [],
+    "description": "无线参数获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "wl_nvramGet": {
+    "index": [],
+    "description": "无线NVRAM配置获取，外部配置数据通过返回值/输出参数返回"
+  },
+  "wl_webGetValue": {
+    "index": [],
+    "description": "无线Web管理界面值获取，外部HTTP请求数据通过返回值/输出参数返回"
+  },
+  "XML_Parse": {
+    "index": [1],
+    "description": "Expat XML解析，buf(索引1)为待解析的外部XML数据缓冲区"
+  },
+  "xml_parse": {
+    "index": [0],
+    "description": "XML解析函数，输入参数(索引0)为待解析的外部XML数据"
+  },
+  "xmlParseDoc": {
+    "index": [0],
+    "description": "libxml2文档解析，cur(索引0)为待解析的外部XML字符串"
+  },
+  "yaml_parser_load": {
+    "index": [0],
+    "description": "YAML解析器加载，输入参数(索引0)为待解析的外部YAML数据"
+  }
+}
