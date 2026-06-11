@@ -34,6 +34,15 @@ python bin_pre_filter.py C:\samples\ --output result.csv --threshold 5
 ```bash
 # 输出绝对路径（默认相对路径）
 python bin_pre_filter.py C:\samples\ -a
+
+# 自定义超时时间（默认 180 秒，超时自动跳过）
+python bin_pre_filter.py C:\samples\ -t 300
+
+# 不限制超时
+python bin_pre_filter.py C:\samples\ -t 0
+
+# 自定义超时文件列表输出路径
+python bin_pre_filter.py C:\samples\ --timeout_output timed_out.txt
 ```
 
 ## 命令行参数
@@ -46,3 +55,5 @@ python bin_pre_filter.py C:\samples\ -a
 | `--output` | 输出 CSV 文件路径 | `output.csv` |
 | `--threshold` | 只输出 Source 函数数量超过该阈值的文件 | `0`（输出所有） |
 | `-a`, `--absolute` | 使用绝对路径输出 | 关闭（默认相对路径） |
+| `-t`, `--timeout` | 每个文件的超时秒数，超时则跳过该文件 | `180` |
+| `--timeout_output` | 超时文件列表输出路径 | `timeouts.txt` |
