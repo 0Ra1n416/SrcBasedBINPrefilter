@@ -66,22 +66,25 @@ def get_inpf_close_funcs(inpf_funcs, inf_close_funcs) -> set:
             
     return exist_path_collision_funcs
         
-def path_collision_analysis(inf_funcs, inpf_funcs, input_bin) -> set:
+def path_collision_analysis(inf_funcs, inpf_funcs, input_bin, opened_db=False) -> set:
     """
     分析输入函数与输入解析函数的路径碰撞情况
-    
+
     :param inf_funcs: 输入函数列表
     :param inpf_funcs: 输入解析函数列表
     :param input_bin: 输入二进制文件路径
+    :param opened_db: 如果为 True，则假定调用方已经打开了数据库，不重复 open/close
     :return exist_path_collision_funcs: 有路径碰撞的输入解析函数集合
     """
-    idapro.open_database(input_bin, True)
-    ida_auto.auto_wait()
+    if not opened_db:
+        idapro.open_database(input_bin, True)
+        ida_auto.auto_wait()
 
     inf_close_funcs = get_inf_close_funcs(inf_funcs)
     # print(f"输入函数的近邻函数有: {inf_close_funcs}")
     exist_path_collision_funcs = get_inpf_close_funcs(inpf_funcs, inf_close_funcs)
     # print(f"存在路径碰撞的函数有: {exist_path_collision_funcs}")
 
-    idapro.close_database()
+    if not opened_db:
+        idapro.close_database()
     return exist_path_collision_funcs

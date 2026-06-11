@@ -27,18 +27,19 @@ def decompile_function(func_ea) -> dict | str:
     except Exception as e:
         return f"[CRASH] {str(e)}"
 
-def batch_decompile(input_file) -> tuple[list, bool]:
+def batch_decompile(input_file, close_db=True) -> tuple[list, bool]:
     """
     批量处理主函数
-    
+
     :param input_file: 输入二进制文件路径
+    :param close_db: 反编译完成后是否关闭数据库。设为 False 时调用方负责后续关闭。
     :return results: 反编译结果列表
     :return has_real_name: 函数名是否可读
     """
     # 打开数据库并自动分析
     idapro.open_database(input_file, True)
     ida_auto.auto_wait()
-    
+
     # 遍历所有函数
     results = []
     DEFAULT_PREFIXES = ["sub_", "nullsub_", "loc_", "sep_"]  # IDA反编译函数默认前缀集合
@@ -49,13 +50,13 @@ def batch_decompile(input_file) -> tuple[list, bool]:
         # 统计默认名称函数数量
         if any(func_name.startswith(prefix) for prefix in DEFAULT_PREFIXES):
             default_name_count += 1
-        
+
         # 反编译并保存结果,如果反编译失败则跳过
         result = decompile_function(func_ea)
         #如果反编译失败不加入结果
         if isinstance(result, dict):
             results.append(result)
-    
+
     # 检查函数名恢复状态
     has_real_name = False
     if len(results) > 0:
@@ -63,10 +64,16 @@ def batch_decompile(input_file) -> tuple[list, bool]:
         # 设为 0.7 表示只要有超过 30% 的函数拥有具体名称，就认为加载了符号或PDB。
         if default_name_count / len(results) < 0.7:
             has_real_name = True
-    
+
     # 关闭数据库
-    idapro.close_database()
+    if close_db:
+        idapro.close_database()
     return results, has_real_name
+
+
+def close_database():
+    """关闭当前打开的 IDA 数据库。在 batch_decompile(close_db=False) 后由调用方调用。"""
+    idapro.close_database()
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

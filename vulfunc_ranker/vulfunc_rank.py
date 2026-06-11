@@ -31,8 +31,11 @@ def vulfunc_rank(input_bin: str,
                  force_add_extern_calls: bool=FORCE_ADD_EXTERN_CALLS,
                  ) -> int:
     """
-    主程序入口，先反编译再检测
-    
+    主程序入口，先反编译再检测。
+
+    优化（Claude Code）：将 3 次 IDA open/close 合并为 1 次：
+    open → auto_wait → decompile → batch_judge → path_collision → get_extern → close
+
     :param input_bin: 输入二进制文件路径
     :param threshold_in: 输入解析函数识别的初始阈值，默认为THRESHOLD常量
     :param original_config_path: 原始配置文件路径
@@ -44,10 +47,10 @@ def vulfunc_rank(input_bin: str,
 
     # 确定 输出 目录路径
     output_base_dir = os.path.abspath(output_base_dir)
-    
+
     # 确保目录存在
     os.makedirs(output_base_dir, exist_ok=True)
-    
+
     # 确定 original_config_path 路径
     original_config_path = os.path.abspath(original_config_path)
 
@@ -55,13 +58,13 @@ def vulfunc_rank(input_bin: str,
     if os.path.dirname(input_bin) == output_base_dir:
         print(f"请勿将输入二进制文件放在输出目录中，以避免与输出文件发生路径冲突。")
         sys.exit(1)
-    
-    # 反编译输入二进制文件
-    # print(f"开始反编译: {input_bin}")
-    decompiled_results, has_real_name = vulfunc_ranker.tasks.decompile.batch_decompile(input_bin)
-    # print("反编译完成!")
 
-    # 新算法判断输入解析函数
+    # === 一次 IDA open/close，完成 decompile + path_collision + get_extern ===
+
+    # 反编译输入二进制文件
+    decompiled_results, has_real_name = vulfunc_ranker.tasks.decompile.batch_decompile(input_bin, close_db=False)
+
+    # 新算法判断输入解析函数（纯 Python AST 分析，不需要 IDA）
     threshold = threshold_in
     if not has_real_name:
         threshold -= 1.5  # 如果函数名不可读，则降低阈值
@@ -70,28 +73,24 @@ def vulfunc_rank(input_bin: str,
     if func_num * 0.02 < top_k_init:
         top_k_init = int(func_num * 0.02)
     results = vulfunc_ranker.tasks.recognize_input_parsing_funcs.batch_judge(decompiled_results, threshold=threshold, top_k=top_k_init)
-   
+
     inpf_funcs = [res['name'] for res in results]
     inf_funcs = inf.get_input_funcs()
-   
-    # 路径碰撞分析
-    # print("开始路径碰撞分析...")
-    path_collision_funcs = pc.path_collision_analysis(inf_funcs, inpf_funcs, input_bin)
 
-    
-    # NOTE：cheat，可以在这里直接修改最后出来的结果
-    # -------------------------------------------------------
-    # path_collision_funcs.add("fopen")
-    # -------------------------------------------------------
-    
-    # 如有需要，强制将外部调用函数加入输入解析函数候选集
+    # 路径碰撞分析（DB 仍处于打开状态）
+    path_collision_funcs = pc.path_collision_analysis(inf_funcs, inpf_funcs, input_bin, opened_db=True)
+
+    # 获取外部调用函数（DB 仍处于打开状态）
     extern_funcs = list()
     if force_add_extern_calls:
-        extern_funcs = ge.get_extern_calls(input_bin)
-    
+        extern_funcs = ge.get_extern_calls(input_bin, opened_db=True)
+
+    # 关闭 IDA 数据库
+    vulfunc_ranker.tasks.decompile.close_database()
+
     # Output:
     source_count = len(path_collision_funcs) + len(extern_funcs)
-    
+
     return source_count
 
 def source_func_count_by_algorithm(input_bin: str) -> int:

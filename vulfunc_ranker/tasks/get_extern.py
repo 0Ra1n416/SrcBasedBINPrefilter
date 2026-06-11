@@ -10,18 +10,20 @@ import ida_nalt
 
 
 
-def get_extern_calls(input_bin) -> list:
+def get_extern_calls(input_bin, opened_db=False) -> list:
     """
     获取外部调用函数列表
-    
+
     :param input_bin: 输入二进制文件路径
+    :param opened_db: 如果为 True，则假定调用方已经打开了数据库，不重复 open/close
     :return extern_calls: 外部调用函数列表
     """
 
-    
-    # 打开数据库并自动分析
-    idapro.open_database(input_bin, True)
-    ida_auto.auto_wait()
+
+    if not opened_db:
+        # 打开数据库并自动分析
+        idapro.open_database(input_bin, True)
+        ida_auto.auto_wait()
 
     imported_functions = []
     imported_seen = set()
@@ -38,8 +40,9 @@ def get_extern_calls(input_bin) -> list:
     for entry_idx in range(ida_nalt.get_import_module_qty()):
         ida_nalt.enum_import_names(entry_idx, _import_cb)
 
-    
-    idapro.close_database()
+
+    if not opened_db:
+        idapro.close_database()
 
     
 

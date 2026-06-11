@@ -4,6 +4,13 @@
 排序分析: 最后输出每个文件的路径和对应的 Source 函数数量，按数量从高到低排序。
 阈值过滤: 可以设置一个阈值，只输出 Source 函数数量超过该阈值的文件，方便快速定位潜在问题较多的二进制文件。
 
+预过滤优化：
+- Magic bytes 检测：识别 PE/ELF/Mach-O 可执行文件头
+- Shebang/文本检测：过滤 Perl/Python/Shell 等脚本文件
+- 文件大小阈值：跳过过小的文件
+
+支持断点续跑（--resume）和按大小升序处理（--sort-by-size）。
+
 Usage: python bin_pre_filter.py <folder_path>
 """
 
@@ -70,20 +77,204 @@ _NON_BINARY_EXTENSIONS = frozenset({
     '.vdb', '.bak', '.tmp', '.log'
 })
 
+# 额外的脚本文件扩展名（不在 _NON_BINARY_EXTENSIONS 中的）
+_SCRIPT_EXTENSIONS = frozenset({
+    '.cgi', '.psgi', '.fcgi',    # Perl/CGI 变体
+    '.t', '.pod',                   # Perl 测试/文档
+    '.lua', '.luac',
+    '.r', '.R',
+    '.swift',
+    '.dart',
+})
+
 
 def is_likely_binary(file_path: str) -> bool:
     """通过扩展名快速过滤明显不是二进制的文件。"""
     ext = os.path.splitext(file_path)[1].lower()
-    return ext not in _NON_BINARY_EXTENSIONS
+    return ext not in _NON_BINARY_EXTENSIONS and ext not in _SCRIPT_EXTENSIONS
+
+
+# ── Magic bytes / 文件头检测 ─────────────────────────────────────────────
+
+# PE 文件签名
+_MZ_SIGNATURE = b'MZ'
+_PE_SIGNATURE = b'PE\x00\x00'
+
+# ELF 文件签名
+_ELF_SIGNATURE = b'\x7fELF'
+
+# Mach-O 文件签名（4 种常见变体）
+_MACHO_SIGNATURES = frozenset({
+    b'\xfe\xed\xfa\xce',  # 32-bit big-endian
+    b'\xfe\xed\xfa\xcf',  # 64-bit big-endian
+    b'\xce\xfa\xed\xfe',  # 32-bit little-endian
+    b'\xcf\xfa\xed\xfe',  # 64-bit little-endian
+})
+
+# Fat/Universal binary 签名
+_FAT_SIGNATURES = frozenset({
+    b'\xca\xfe\xba\xbe',
+    b'\xbe\xba\xfe\xca',
+})
+
+# 常见脚本 shebang 前缀
+_SHEBANG_PREFIX = b'#!'
+
+# Perl 特征字符串（用于文本内容检测）
+_PERL_MARKERS = [
+    b'#!/usr/bin/perl',
+    b'#!/usr/bin/env perl',
+    b'#!/bin/perl',
+    b'use strict',
+    b'use warnings',
+    b'use v5.',
+    b'package ',
+]
+
+# 读取文件头的大小上限
+_HEADER_READ_SIZE = 4096
+
+
+def _read_file_header(file_path: str, size: int = _HEADER_READ_SIZE) -> bytes | None:
+    """安全读取文件头若干字节。"""
+    try:
+        with open(file_path, 'rb') as f:
+            return f.read(size)
+    except (OSError, PermissionError):
+        return None
+
+
+def _is_mz_pe(header: bytes) -> bool:
+    """
+    检测 PE 文件：先检查 MZ 头，再验证 PE\0\0 签名。
+    通过 0x3C 处的 DWORD 定位 PE signature。
+    """
+    if len(header) < 2 or header[:2] != _MZ_SIGNATURE:
+        return False
+    if len(header) < 0x40:
+        return False
+    # 读取 0x3C 处的 DWORD（PE signature offset，小端序）
+    pe_offset = int.from_bytes(header[0x3C:0x40], 'little')
+    if pe_offset + 4 > len(header):
+        return False
+    return header[pe_offset:pe_offset + 4] == _PE_SIGNATURE
+
+
+def _is_elf(header: bytes) -> bool:
+    """检测 ELF 文件。"""
+    return len(header) >= 4 and header[:4] == _ELF_SIGNATURE
+
+
+def _is_macho(header: bytes) -> bool:
+    """检测 Mach-O 文件。"""
+    return len(header) >= 4 and header[:4] in _MACHO_SIGNATURES
+
+
+def _is_fat_binary(header: bytes) -> bool:
+    """检测 Fat/Universal binary。"""
+    return len(header) >= 4 and header[:4] in _FAT_SIGNATURES
+
+
+def is_executable_binary(file_path: str) -> bool:
+    """
+    通过文件头 magic bytes 判断是否为可执行文件。
+    支持 PE (Windows)、ELF (Linux)、Mach-O / Fat binary (macOS)。
+    """
+    header = _read_file_header(file_path, 1024)
+    if header is None or len(header) < 4:
+        return False
+    return _is_mz_pe(header) or _is_elf(header) or _is_macho(header) or _is_fat_binary(header)
+
+
+def _has_shebang(header: bytes) -> bool:
+    """检查文件是否以 shebang (#!) 开头。"""
+    return header[:2] == _SHEBANG_PREFIX
+
+
+def _is_text_content(header: bytes) -> bool:
+    """
+    判断文件内容是否为文本：尝试 UTF-8 解码，计算可打印字符比例。
+    返回 True 如果 >= 90% 的字节是可打印 ASCII 或合法 UTF-8 多字节序列。
+    """
+    if len(header) == 0:
+        return True  # 空文件视为文本
+    try:
+        text = header.decode('utf-8')
+        printable = sum(1 for c in text if c.isprintable() or c in '\n\r\t')
+        return printable / max(len(text), 1) >= 0.90
+    except UnicodeDecodeError:
+        return False
+
+
+def _has_perl_markers(header: bytes) -> bool:
+    """检查文件内容是否包含 Perl 语言特征。"""
+    for marker in _PERL_MARKERS:
+        if marker in header:
+            return True
+    return False
+
+
+def is_script_or_text(file_path: str) -> bool:
+    """
+    判断文件是否为脚本或纯文本文件。
+    检查 shebang + 文本内容特征 + Perl 关键字。
+    """
+    header = _read_file_header(file_path)
+    if header is None or len(header) == 0:
+        return False  # 读取失败视为可疑，放行给 IDA 尝试
+
+    # Shebang 检测
+    if _has_shebang(header):
+        return True
+
+    # Perl 关键字检测（无 shebang 的情况）
+    if _has_perl_markers(header):
+        return True
+
+    # 纯文本检测
+    if _is_text_content(header):
+        return True
+
+    return False
+
 
 def pre_defined_source_funcs_count() -> int:
     """返回预定义的 Source 函数数量。"""
     return source_func_count()
 
-def scan_folder(folder_path: str, 
-                pre_defined_count: int, 
-                use_absolute: bool = False, 
-                timeout_per_file: int = 180) -> tuple[dict, dict, list]:
+
+# ── Checkpoint 支持 ───────────────────────────────────────────────────────
+
+def load_checkpoint(checkpoint_csv: str) -> set[str]:
+    """读取已处理的文件路径集合。"""
+    processed = set()
+    if not os.path.exists(checkpoint_csv):
+        return processed
+    with open(checkpoint_csv, 'r', encoding='utf-8', newline='') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if row:
+                processed.add(row[0])
+    return processed
+
+
+def append_checkpoint(checkpoint_csv: str, file_path: str, count: int) -> None:
+    """追加单条结果到 checkpoint。"""
+    with open(checkpoint_csv, 'a', encoding='utf-8', newline='') as f:
+        csv.writer(f).writerow([file_path, count])
+
+
+# ── 主扫描逻辑 ────────────────────────────────────────────────────────────
+
+def scan_folder(folder_path: str,
+                pre_defined_count: int,
+                use_absolute: bool = False,
+                timeout_per_file: int = 180,
+                min_file_size: int = 512,
+                sort_by_size: bool = True,
+                strict: bool = False,
+                dry_run: bool = False,
+                checkpoint_csv: str | None = None) -> tuple[dict, dict, list]:
     """
     递归扫描文件夹中的所有二进制文件，统计每个文件的 Source 函数个数。
 
@@ -91,6 +282,11 @@ def scan_folder(folder_path: str,
     :param pre_defined_count: 预定义的 Source 函数数量
     :param use_absolute: 是否输出绝对路径，默认为 False（即相对路径）
     :param timeout_per_file: 每个二进制的超时时间（秒），超时则跳过；默认为 180 秒，设为 0 表示不限制
+    :param min_file_size: 最小文件大小（字节），小于此值的文件跳过
+    :param sort_by_size: 是否按文件大小升序处理（小文件优先，更快积攒进度）
+    :param strict: 是否严格模式——跳过所有未识别格式（默认 False）
+    :param dry_run: 仅统计过滤结果，不实际运行 IDA
+    :param checkpoint_csv: Checkpoint CSV 路径，用于断点续跑
     """
     folder_path = os.path.abspath(folder_path)
 
@@ -101,32 +297,145 @@ def scan_folder(folder_path: str,
     print(f"[PreFilter] 开始扫描文件夹: {folder_path}")
     if timeout_per_file > 0:
         print(f"[PreFilter] 单文件超时: {timeout_per_file} 秒")
+    print(f"[PreFilter] 最小文件大小: {min_file_size} 字节")
+    print(f"[PreFilter] 按大小升序: {'是' if sort_by_size else '否'}")
+    print(f"[PreFilter] 严格模式: {'是' if strict else '否（放行未知格式）'}")
 
-    # 第一遍：收集所有待处理的二进制文件
+    # 加载 checkpoint
+    checkpoint_processed = set()
+    if checkpoint_csv:
+        checkpoint_processed = load_checkpoint(checkpoint_csv)
+        if checkpoint_processed:
+            print(f"[PreFilter] 从 checkpoint 恢复: 已处理 {len(checkpoint_processed)} 个文件")
+
+    # ── 第一遍：收集所有候选文件，同时做预过滤统计 ──
     all_binaries = []
-    skipped = 0
+    stats = {
+        "ext_skipped": 0,          # 扩展名过滤
+        "size_skipped": 0,         # 大小不足
+        "magic_passed": 0,         # magic bytes 识别为可执行
+        "script_skipped": 0,       # shebang/文本/Perl 过滤
+        "unknown_skipped": 0,      # 未知格式跳过
+        "unknown_passed": 0,       # 未知格式放行（strict=False）
+    }
+    size_buckets_all = {"<1KB": 0, "1KB-10KB": 0, "10KB-100KB": 0,
+                        "100KB-1MB": 0, "1MB-10MB": 0, "10MB-100MB": 0, ">100MB": 0}
+    size_buckets_filtered = {"<1KB": 0, "1KB-10KB": 0, "10KB-100KB": 0,
+                             "100KB-1MB": 0, "1MB-10MB": 0, "10MB-100MB": 0, ">100MB": 0}
+
+    def _bucket(size: int) -> str:
+        if size < 1024:
+            return "<1KB"
+        elif size < 10 * 1024:
+            return "1KB-10KB"
+        elif size < 100 * 1024:
+            return "10KB-100KB"
+        elif size < 1024 * 1024:
+            return "100KB-1MB"
+        elif size < 10 * 1024 * 1024:
+            return "1MB-10MB"
+        elif size < 100 * 1024 * 1024:
+            return "10MB-100MB"
+        else:
+            return ">100MB"
 
     for root, dirs, files in os.walk(folder_path):
         for filename in files:
             file_path = os.path.join(root, filename)
-            if is_likely_binary(file_path):
+
+            # Step 1: 扩展名过滤
+            if not is_likely_binary(file_path):
+                stats["ext_skipped"] += 1
+                continue
+
+            # 获取文件大小
+            try:
+                file_size = os.path.getsize(file_path)
+            except OSError:
+                continue
+
+            size_buckets_all[_bucket(file_size)] += 1
+
+            # Step 2: 大小阈值
+            if file_size < min_file_size:
+                stats["size_skipped"] += 1
+                continue
+
+            # Step 3: Magic bytes 检测
+            is_exec = is_executable_binary(file_path)
+
+            if is_exec:
+                stats["magic_passed"] += 1
+                size_buckets_filtered[_bucket(file_size)] += 1
                 all_binaries.append(file_path)
             else:
-                skipped += 1
+                # Step 4: Shebang / 文本 / Perl 检测
+                is_script = is_script_or_text(file_path)
+                if is_script:
+                    stats["script_skipped"] += 1
+                elif strict:
+                    stats["unknown_skipped"] += 1
+                else:
+                    stats["unknown_passed"] += 1
+                    size_buckets_filtered[_bucket(file_size)] += 1
+                    all_binaries.append(file_path)
 
-    print(f"[OUT] 共发现 {len(all_binaries)} 个二进制文件，跳过 {skipped} 个常见非二进制文件")
+    # ── 打印预过滤统计 ──
+    print("\n" + "=" * 60)
+    print("[PreFilter] 预过滤统计")
+    print("=" * 60)
+    print(f"  扩展名过滤:      {stats['ext_skipped']:>6}")
+    print(f"  大小不足 (<{min_file_size}B): {stats['size_skipped']:>6}")
+    print(f"  Magic bytes 放行:{stats['magic_passed']:>6}  (PE/ELF/Mach-O)")
+    print(f"  脚本/文本 过滤:   {stats['script_skipped']:>6}")
+    if strict:
+        print(f"  未知格式 跳过:    {stats['unknown_skipped']:>6}")
+    else:
+        print(f"  未知格式 放行:    {stats['unknown_passed']:>6}")
+    total_filtered = sum(v for k, v in stats.items() if k.endswith('_passed'))
+    print(f"  ───────────────────────────")
+    print(f"  提交 IDA 处理:    {total_filtered:>6}")
 
-    # 第二遍：用 tqdm 进度条逐个处理（每个二进制在子进程中运行，超时自动 kill）
-    print("[PreFilter] 开始处理二进制文件...")
-    results = {}   # file_path -> count (成功)
+    print("\n[PreFilter] 全量文件大小分布:")
+    for bucket in ["<1KB", "1KB-10KB", "10KB-100KB", "100KB-1MB", "1MB-10MB", "10MB-100MB", ">100MB"]:
+        print(f"  {bucket}: {size_buckets_all[bucket]}")
+
+    print("\n[PreFilter] 过滤后（提交 IDA）文件大小分布:")
+    for bucket in ["<1KB", "1KB-10KB", "10KB-100KB", "100KB-1MB", "1MB-10MB", "10MB-100MB", ">100MB"]:
+        print(f"  {bucket}: {size_buckets_filtered[bucket]}")
+
+    if dry_run:
+        print("\n[PreFilter] --dry-run 模式：仅统计，不执行 IDA 分析。")
+        return {}, {}, []
+
+    # 去掉已 checkpoint 处理过的文件
+    if checkpoint_processed:
+        before = len(all_binaries)
+        all_binaries = [p for p in all_binaries if p not in checkpoint_processed]
+        if before != len(all_binaries):
+            print(f"[PreFilter] Checkpoint 跳过已处理: {before - len(all_binaries)} 个")
+
+    if not all_binaries:
+        print("[PreFilter] 没有需要处理的文件。")
+        return {}, {}, []
+
+    # ── 按大小排序（小文件优先） ──
+    if sort_by_size:
+        all_binaries.sort(key=lambda p: os.path.getsize(p) if os.path.exists(p) else 0)
+
+    # ── 第二遍：用 tqdm 进度条逐个处理 ──
+    print(f"\n[PreFilter] 开始处理 {len(all_binaries)} 个二进制文件...")
+    results = {}     # file_path -> count (成功)
     timeouts = []    # file_path 列表 (超时)
-    errors = {}    # file_path -> error_message
+    errors = {}      # file_path -> error_message
 
-    p_bar = tqdm.tqdm(all_binaries, desc="处理二进制文件", unit="file")
+    p_bar = tqdm.tqdm(all_binaries, desc="处理二进制文件", unit="file",
+                      smoothing=0.01)  # 低平滑系数，ETA 更灵敏
 
     for file_path in p_bar:
-        # 在进度条下方显示当前正在处理的二进制文件路径
-        p_bar.set_postfix_str(os.path.relpath(file_path, folder_path))
+        rel_path = os.path.relpath(file_path, folder_path)
+        # 在进度条下方显示当前文件
+        p_bar.set_postfix_str(rel_path[:60])
 
         result_queue: multiprocessing.Queue = multiprocessing.Queue()
         proc = multiprocessing.Process(
@@ -140,14 +449,16 @@ def scan_folder(folder_path: str,
         if proc.is_alive():
             # 超时：强制终止子进程
             proc.kill()
-            proc.join()  # 等待进程真正结束
+            proc.join()
             timeouts.append(file_path)
         else:
-            # 子进程正常结束，读取结果
             try:
                 status, fpath, data = result_queue.get_nowait()
                 if status == 'ok':
                     results[fpath] = data
+                    # 立即写入 checkpoint
+                    if checkpoint_csv:
+                        append_checkpoint(checkpoint_csv, fpath, data)
                 else:
                     errors[fpath] = data
             except Exception:
@@ -156,7 +467,7 @@ def scan_folder(folder_path: str,
     # 默认使用相对路径，除非指定了 --absolute
     if not use_absolute:
         results = {os.path.relpath(k, folder_path): v for k, v in results.items()}
-        errors  = {os.path.relpath(k, folder_path): v for k, v in errors.items()}
+        errors = {os.path.relpath(k, folder_path): v for k, v in errors.items()}
         timeouts = [os.path.relpath(p, folder_path) for p in timeouts]
 
     # 汇总
@@ -164,12 +475,13 @@ def scan_folder(folder_path: str,
     print("[OUT] 二进制文件处理汇总")
     print("=" * 60)
 
-    print(f"跳过 (常见非二进制): {skipped}")
-    print(f"成功处理:        {len(results)}")
-    print(f"处理出错:        {len(errors)}")
-    print(f"处理超时:        {len(timeouts)}")
+    print(f"预过滤跳过:       {sum(v for k, v in stats.items() if k.endswith('_skipped'))}")
+    print(f"成功处理:         {len(results)}")
+    print(f"处理出错:         {len(errors)}")
+    print(f"处理超时:         {len(timeouts)}")
 
     return results, errors, timeouts
+
 
 def rank(success: dict, threshold: int = 0) -> list[tuple[str, int]]:
     """
@@ -180,16 +492,16 @@ def rank(success: dict, threshold: int = 0) -> list[tuple[str, int]]:
 
     :return ranked_list: 排序后的列表，格式为 [(file_path, count), ...]
     """
-    # 过滤并排序
     message = f"\n[PreFilter] 开始排序..."
     if threshold > 0:
         message = f"\n[PreFilter] 开始排序与过滤 (阈值: {threshold})..."
     print(message)
-    
+
     filtered = [(fp, cnt) for fp, cnt in success.items() if cnt >= threshold]
     ranked_list = sorted(filtered, key=lambda x: x[1], reverse=True)
 
     return ranked_list
+
 
 def store(ranked_list: list[tuple[str, int]], timeouts: list[str], output_path: str, timeout_output_path: str) -> None:
     """
@@ -210,21 +522,47 @@ def store(ranked_list: list[tuple[str, int]], timeouts: list[str], output_path: 
             f.write(f"{file_path}\n")
     print(f"[PreFilter] 结果已保存到: {output_path} 和 {timeout_output_path}")
 
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="批量扫描文件夹中的二进制文件，统计每个文件的 Source 函数数量。")
     parser.add_argument("folder_path", help="要扫描的文件夹路径")
     parser.add_argument("--output", type=str, default="output.csv", help="输出 CSV 文件路径（默认为 output.csv）")
-    parser.add_argument("--timeout_output", type=str, default="timeouts.txt", help="超时文件列表输出路径（默认为 timeouts.txt）")
+    parser.add_argument("--timeout-output", type=str, default="timeouts.txt", help="超时文件列表输出路径（默认为 timeouts.txt）")
     parser.add_argument("--threshold", type=int, default=0, help="只输出 Source 函数数量超过该阈值的文件，默认为0（即输出所有文件）")
     parser.add_argument("-a", "--absolute", action="store_true", help="使用绝对路径输出（默认为相对路径）")
     parser.add_argument("-t", "--timeout", type=int, default=180, help="每个文件的超时秒数，超时则跳过；默认为 180 秒，设为 0 表示不限制")
+    parser.add_argument("--min-size", type=int, default=512, help="最小文件大小（字节），小于此值的文件跳过；默认 512")
+    parser.add_argument("--no-sort", action="store_true", help="不按文件大小升序排列（默认会按大小升序）")
+    parser.add_argument("--no-strict", action="store_true", help="非严格模式：放行所有未识别格式（默认严格模式，跳过未识别）")
+    parser.add_argument("--dry-run", action="store_true", help="仅统计过滤结果，不实际运行 IDA")
+    parser.add_argument("--resume", type=str, default=None, help="断点续跑：指定 checkpoint CSV 路径")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Checkpoint CSV 路径（默认与 --resume 相同）")
     args = parser.parse_args()
 
+    strict_mode = not args.no_strict  # 默认严格模式，--no-strict 关闭
+
     pre_defined_count = pre_defined_source_funcs_count()
-    success, _, timeouts = scan_folder(args.folder_path, pre_defined_count, use_absolute=args.absolute, timeout_per_file=args.timeout)
+    checkpoint_csv = args.checkpoint or args.resume
+
+    success, errors, timeouts = scan_folder(
+        args.folder_path,
+        pre_defined_count,
+        use_absolute=args.absolute,
+        timeout_per_file=args.timeout,
+        min_file_size=args.min_size,
+        sort_by_size=not args.no_sort,
+        strict=strict_mode,
+        dry_run=args.dry_run,
+        checkpoint_csv=checkpoint_csv,
+    )
+
+    if args.dry_run:
+        return
+
     ranked_list = rank(success, args.threshold)
     store(ranked_list, timeouts, args.output, args.timeout_output)
+
 
 if __name__ == "__main__":
     main()
