@@ -74,7 +74,7 @@ _NON_BINARY_EXTENSIONS = frozenset({
     # IDA数据文件
     '.idb', '.i64', '.idc', '.idap', '.idapro', '.idb.idc',
     # 其他数据文件
-    '.vdb', '.bak', '.tmp', '.log'
+    '.vdb', '.bak', '.tmp'
 })
 
 # 额外的脚本文件扩展名（不在 _NON_BINARY_EXTENSIONS 中的）
@@ -272,7 +272,7 @@ def scan_folder(folder_path: str,
                 timeout_per_file: int = 180,
                 min_file_size: int = 512,
                 sort_by_size: bool = True,
-                strict: bool = False,
+                strict: bool = True,
                 dry_run: bool = False,
                 checkpoint_csv: str | None = None) -> tuple[dict, dict, list]:
     """
@@ -284,7 +284,7 @@ def scan_folder(folder_path: str,
     :param timeout_per_file: 每个二进制的超时时间（秒），超时则跳过；默认为 180 秒，设为 0 表示不限制
     :param min_file_size: 最小文件大小（字节），小于此值的文件跳过
     :param sort_by_size: 是否按文件大小升序处理（小文件优先，更快积攒进度）
-    :param strict: 是否严格模式——跳过所有未识别格式（默认 False）
+    :param strict: 是否严格模式——跳过所有未识别格式（默认 True）
     :param dry_run: 仅统计过滤结果，不实际运行 IDA
     :param checkpoint_csv: Checkpoint CSV 路径，用于断点续跑
     """
