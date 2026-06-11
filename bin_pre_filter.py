@@ -157,6 +157,7 @@ def scan_folder(folder_path: str,
     if not use_absolute:
         results = {os.path.relpath(k, folder_path): v for k, v in results.items()}
         errors  = {os.path.relpath(k, folder_path): v for k, v in errors.items()}
+        timeouts = [os.path.relpath(p, folder_path) for p in timeouts]
 
     # 汇总
     print("\n" + "=" * 60)
