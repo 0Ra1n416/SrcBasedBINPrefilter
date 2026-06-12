@@ -72,7 +72,7 @@ _NON_BINARY_EXTENSIONS = frozenset({
     '.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar', '.cab',
     '.ipynb',
     # IDA数据文件
-    '.idb', '.i64', '.idc', '.idap', '.idapro', '.idb.idc',
+    '.idb', '.i64', '.idc', '.idap', '.idapro', '.idb.idc', '.id0', '.id1', '.id2', '.id3', '.nam', '.til', '.til64',
     # 其他数据文件
     '.vdb', '.bak', '.tmp'
 })
@@ -245,23 +245,30 @@ def pre_defined_source_funcs_count() -> int:
 
 # ── Checkpoint 支持 ───────────────────────────────────────────────────────
 
-def load_checkpoint(checkpoint_csv: str) -> set[str]:
+def load_checkpoint(checkpoint_csv: str) -> tuple[dict[str, int], set[str]]:
     """读取已处理的文件路径集合。"""
-    processed = set()
+    processed = {}
+    processed_timeout = set()
     if not os.path.exists(checkpoint_csv):
-        return processed
+        return processed, processed_timeout
     with open(checkpoint_csv, 'r', encoding='utf-8', newline='') as f:
         reader = csv.reader(f)
         for row in reader:
             if row:
-                processed.add(row[0])
-    return processed
+                if row[1] == "timeout":
+                    processed_timeout.add(row[0])
+                else:
+                    processed[row[0]] = int(row[1]) if row[1].isdigit() else 0
+    return processed, processed_timeout
 
 
-def append_checkpoint(checkpoint_csv: str, file_path: str, count: int) -> None:
+def append_checkpoint(checkpoint_csv: str, file_path: str, count: int, timeout: bool = False) -> None:
     """追加单条结果到 checkpoint。"""
     with open(checkpoint_csv, 'a', encoding='utf-8', newline='') as f:
-        csv.writer(f).writerow([file_path, count])
+        if timeout:
+            csv.writer(f).writerow([file_path, "timeout"])
+        else:
+            csv.writer(f).writerow([file_path, count])
 
 
 # ── 主扫描逻辑 ────────────────────────────────────────────────────────────
@@ -302,11 +309,12 @@ def scan_folder(folder_path: str,
     print(f"[PreFilter] 严格模式: {'是' if strict else '否（放行未知格式）'}")
 
     # 加载 checkpoint
-    checkpoint_processed = set()
+    checkpoint_processed = {}
+    checkpoint_processed_timeout = set()
     if checkpoint_csv:
-        checkpoint_processed = load_checkpoint(checkpoint_csv)
-        if checkpoint_processed:
-            print(f"[PreFilter] 从 checkpoint 恢复: 已处理 {len(checkpoint_processed)} 个文件")
+        checkpoint_processed, checkpoint_processed_timeout = load_checkpoint(checkpoint_csv)
+        if checkpoint_processed or checkpoint_processed_timeout:
+            print(f"[PreFilter] 从 checkpoint 恢复: 已处理 {len(checkpoint_processed) + len(checkpoint_processed_timeout)} 个文件")
 
     # ── 第一遍：收集所有候选文件，同时做预过滤统计 ──
     all_binaries = []
@@ -408,17 +416,6 @@ def scan_folder(folder_path: str,
         print("\n[PreFilter] --dry-run 模式：仅统计，不执行 IDA 分析。")
         return {}, {}, []
 
-    # 去掉已 checkpoint 处理过的文件
-    if checkpoint_processed:
-        before = len(all_binaries)
-        all_binaries = [p for p in all_binaries if p not in checkpoint_processed]
-        if before != len(all_binaries):
-            print(f"[PreFilter] Checkpoint 跳过已处理: {before - len(all_binaries)} 个")
-
-    if not all_binaries:
-        print("[PreFilter] 没有需要处理的文件。")
-        return {}, {}, []
-
     # ── 按大小排序（小文件优先） ──
     if sort_by_size:
         all_binaries.sort(key=lambda p: os.path.getsize(p) if os.path.exists(p) else 0)
@@ -428,6 +425,25 @@ def scan_folder(folder_path: str,
     results = {}     # file_path -> count (成功)
     timeouts = []    # file_path 列表 (超时)
     errors = {}      # file_path -> error_message
+
+    if checkpoint_processed:
+        for p, cnt in checkpoint_processed.items():
+            results[p] = cnt
+    if checkpoint_processed_timeout:
+        for p in checkpoint_processed_timeout:
+            timeouts.append(p)
+
+    # 去掉已 checkpoint 处理过的文件
+    if checkpoint_processed or checkpoint_processed_timeout:
+        before = len(all_binaries)
+        skip_set = set(checkpoint_processed.keys()) | checkpoint_processed_timeout
+        all_binaries = [p for p in all_binaries if p not in skip_set]
+        if before != len(all_binaries):
+            print(f"[PreFilter] Checkpoint 跳过已处理: {before - len(all_binaries)} 个")
+
+    if not all_binaries:
+        print("[PreFilter] 没有需要处理的文件。")
+        return results, errors, timeouts
 
     p_bar = tqdm.tqdm(all_binaries, desc="处理二进制文件", unit="file",
                       smoothing=0.01)  # 低平滑系数，ETA 更灵敏
@@ -451,6 +467,8 @@ def scan_folder(folder_path: str,
             proc.kill()
             proc.join()
             timeouts.append(file_path)
+            if checkpoint_csv:
+                append_checkpoint(checkpoint_csv, file_path, 0, timeout=True)
         else:
             try:
                 status, fpath, data = result_queue.get_nowait()
